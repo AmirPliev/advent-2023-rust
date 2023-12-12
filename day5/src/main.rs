@@ -1,3 +1,4 @@
+use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::fs;
 
@@ -7,50 +8,76 @@ fn main() {
         fs::read_to_string(file_path).expect("Should have been able to read the file");
     let lines: Vec<&str> = contents.lines().collect();
 
-    println!("Start");
     let seeds = get_defined_seeds(&lines[0]);
-    println!("Got seeds");
     let pipeline = collect_pipeline(lines);
-    println!("Got pipeilnes");
 
-    let mut lowest = f64::INFINITY;
-    for (index, seed) in seeds.iter().enumerate() {
-        println!("0");
-        let soil = get_value(&pipeline["seed-to-soil"], &*seed);
-        println!("1");
-        let fert = get_value(&pipeline["soil-to-fertilizer"], &soil);
-        println!("2");
-        let water = get_value(&pipeline["fertilizer-to-water"], &fert);
-        println!("3");
-        let light = get_value(&pipeline["water-to-light"], &water);
-        println!("4");
-        let temp = get_value(&pipeline["light-to-temperature"], &light);
-        println!("5");
-        let hum = get_value(&pipeline["temperature-to-humidity"], &temp);
-        println!("6");
-        let location = get_value(&pipeline["humidity-to-location"], &hum);
-
-        let location_number = location.parse::<u64>().unwrap();
-        if location_number < (lowest as u64) {
-            lowest = location_number as f64;
+    println!("Part One");
+    let mut lowest_part_one: f64 = f64::INFINITY;
+    for seed in &seeds {
+        let location = get_seed_location(&seed, &pipeline);
+        if location < lowest_part_one {
+            lowest_part_one = location;
         }
+    }
+
+    println!("Part Two");
+    let mut lowest_part_two: f64 = f64::INFINITY;
+    for index in (0..seeds.len()).step_by(2) {
+        let start = seeds[index].parse::<u64>().unwrap();
+        let range = seeds[index + 1].parse::<u64>().unwrap();
+
+        let bar = ProgressBar::new(start + range);
+        for seed in start..start + range {
+            let location = get_seed_location(&seed.to_string(), &pipeline);
+
+            if location < lowest_part_two {
+                lowest_part_two = location;
+            }
+            bar.inc(1);
+        }
+        bar.finish();
 
         println!("{} / {}", index, seeds.len());
     }
 
-    println!("{}", lowest);
+    println!("Part One: {}", lowest_part_one);
+    println!("Part Two: {}", lowest_part_two);
 }
 
-fn get_value(dictionary: &HashMap<String, String>, value: &str) -> String {
-    let one = dictionary.get(value);
-    match one {
-        Some(dict_value) => dict_value.clone(),
-        None => value.to_string(),
+fn get_seed_location(seed: &String, pipeline: &HashMap<String, Vec<HashMap<String, u32>>>) -> f64 {
+    let first_seed = seed.parse::<u32>().unwrap();
+
+    let soil = get_value(&pipeline["seed-to-soil"], first_seed);
+    let fert = get_value(&pipeline["soil-to-fertilizer"], soil);
+    let water = get_value(&pipeline["fertilizer-to-water"], fert);
+    let light = get_value(&pipeline["water-to-light"], water);
+    let temp = get_value(&pipeline["light-to-temperature"], light);
+    let hum = get_value(&pipeline["temperature-to-humidity"], temp);
+    let location = get_value(&pipeline["humidity-to-location"], hum);
+
+    return location as f64;
+}
+
+fn get_value(mappings: &Vec<HashMap<String, u32>>, value: u32) -> u32 {
+    for mapping in mappings {
+        if value >= mapping["start"] && value < mapping["end"] {
+            let destination = mapping["destination"];
+
+            if destination < mapping["start"] {
+                let delta = mapping["start"] - destination;
+                return value - delta;
+            } else {
+                let delta = destination - mapping["start"];
+                return value + delta;
+            }
+        }
     }
+
+    return value;
 }
 
-fn collect_pipeline(lines: Vec<&str>) -> HashMap<String, HashMap<String, String>> {
-    let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
+fn collect_pipeline(lines: Vec<&str>) -> HashMap<String, Vec<HashMap<String, u32>>> {
+    let mut result: HashMap<String, Vec<HashMap<String, u32>>> = HashMap::new();
 
     let indexes = find_all_titles(&lines);
 
@@ -58,7 +85,6 @@ fn collect_pipeline(lines: Vec<&str>) -> HashMap<String, HashMap<String, String>
         let title_index = indexes[index as usize] as usize + 1;
         let next_index = indexes[index as usize + 1] as usize;
         let slice: Vec<&str> = lines[title_index..next_index].to_vec();
-        println!("indexes gerekend");
 
         let title = lines[title_index - 1].split(" ").collect::<Vec<&str>>()[0].to_string();
 
@@ -69,8 +95,8 @@ fn collect_pipeline(lines: Vec<&str>) -> HashMap<String, HashMap<String, String>
     result
 }
 
-fn create_mapping(lines: &Vec<&str>) -> HashMap<String, String> {
-    let mut result: HashMap<String, String> = HashMap::new();
+fn create_mapping(lines: &Vec<&str>) -> Vec<HashMap<String, u32>> {
+    let mut result: Vec<HashMap<String, u32>> = Vec::new();
 
     for line in lines {
         if line == &"" {
@@ -81,18 +107,13 @@ fn create_mapping(lines: &Vec<&str>) -> HashMap<String, String> {
         let destination_start = numbers[0].parse::<u64>().unwrap();
         let source_start = numbers[1].parse::<u64>().unwrap();
         let range = numbers[2].parse::<u64>().unwrap();
-        println!("Wat dingen berekend");
 
         let source_end = source_start + range;
-
-        println!("Dit kan lang duren: {}", source_end - source_start);
-        for index in source_start..source_end {
-            let mapping_index = index.to_string();
-            let mapped_number = destination_start + (index - source_start);
-            let mapped_string = mapped_number.to_string();
-            result.insert(mapping_index, mapped_string);
-        }
-        println!("Maar nu wel klaar");
+        let mut new_mapping: HashMap<String, u32> = HashMap::new();
+        new_mapping.insert("start".to_owned(), source_start as u32);
+        new_mapping.insert("end".to_owned(), source_end as u32);
+        new_mapping.insert("destination".to_owned(), destination_start as u32);
+        result.push(new_mapping);
     }
 
     result
