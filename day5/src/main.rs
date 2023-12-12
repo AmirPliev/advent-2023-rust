@@ -1,4 +1,5 @@
-use indicatif::ProgressBar;
+// use indicatif::ProgressBar;
+use std::cmp;
 use std::collections::HashMap;
 use std::fs;
 
@@ -11,37 +12,84 @@ fn main() {
     let seeds = get_defined_seeds(&lines[0]);
     let pipeline = collect_pipeline(lines);
 
-    println!("Part One");
     let mut lowest_part_one: f64 = f64::INFINITY;
     for seed in &seeds {
         let location = get_seed_location(&seed, &pipeline);
+
         if location < lowest_part_one {
             lowest_part_one = location;
         }
     }
 
-    println!("Part Two");
-    let mut lowest_part_two: f64 = f64::INFINITY;
+    let mut part_two_seeds: Vec<Vec<u64>> = Vec::new();
     for index in (0..seeds.len()).step_by(2) {
-        let start = seeds[index].parse::<u64>().unwrap();
-        let range = seeds[index + 1].parse::<u64>().unwrap();
+        let start_seed = seeds[index].parse::<u64>().unwrap();
+        let end_seed = seeds[index + 1].parse::<u64>().unwrap() + start_seed;
 
-        let bar = ProgressBar::new(start + range);
-        for seed in start..start + range {
-            let location = get_seed_location(&seed.to_string(), &pipeline);
+        part_two_seeds.push(vec![start_seed, end_seed]);
+    }
 
-            if location < lowest_part_two {
-                lowest_part_two = location;
+    let pipeline_keys = vec![
+        "seed-to-soil",
+        "soil-to-fertilizer",
+        "fertilizer-to-water",
+        "water-to-light",
+        "light-to-temperature",
+        "temperature-to-humidity",
+        "humidity-to-location",
+    ];
+
+    for key in pipeline_keys {
+        let block: &Vec<HashMap<String, u32>> = &pipeline[key];
+        let mut new: Vec<Vec<u64>> = Vec::new();
+
+        while part_two_seeds.len() > 0 {
+            let range: Vec<u64> = part_two_seeds.pop().unwrap();
+            let s = range[0] as u64;
+            let e = range[1] as u64;
+
+            let mut append_thing = true;
+
+            for line in block {
+                let a = line["destination"] as u64;
+                let b = line["start"] as u64;
+                let c = line["end"] as u64;
+
+                let os = cmp::max(s, b);
+                let oe = cmp::min(e, c);
+
+                if os < oe {
+                    new.push(vec![os - b + a, oe - b + a]);
+
+                    if os > s {
+                        part_two_seeds.push(vec![s, os]);
+                    }
+
+                    if e > oe {
+                        part_two_seeds.push(vec![oe, e]);
+                    }
+                    append_thing = false;
+                    break;
+                }
             }
-            bar.inc(1);
-        }
-        bar.finish();
 
-        println!("{} / {}", index, seeds.len());
+            if append_thing {
+                new.push(vec![s, e]);
+            }
+        }
+
+        part_two_seeds = new;
+    }
+
+    let mut lowest_part_two: f64 = f64::INFINITY;
+    for range in part_two_seeds {
+        if range[0] < lowest_part_two as u64 {
+            lowest_part_two = range[0] as f64;
+        }
     }
 
     println!("Part One: {}", lowest_part_one);
-    println!("Part Two: {}", lowest_part_two);
+    println!("Part Two: {}", lowest_part_two as u64);
 }
 
 fn get_seed_location(seed: &String, pipeline: &HashMap<String, Vec<HashMap<String, u32>>>) -> f64 {
