@@ -1,7 +1,7 @@
-use std::fs;
+use std::{fs, vec};
 
 fn main() {
-    let file_path: &str = "test_input.txt";
+    let file_path: &str = "input.txt";
     let contents: String =
         fs::read_to_string(file_path).expect("Should have been able to read the file");
     let lines: Vec<&str> = contents.lines().collect();
@@ -10,20 +10,22 @@ fn main() {
     println!("{:?}", starting_point);
 
     let main_loop = gather_main_loop(&lines, starting_point);
-    println!("{:?}", main_loop);
+    println!("Part One: {}", (main_loop.len() - 1) / 2);
 }
 
 fn gather_main_loop(lines: &Vec<&str>, starting_point: (i32, i32)) -> Vec<(i32, i32)> {
     let mut main_loop: Vec<(i32, i32)> = Vec::new();
     main_loop.push(starting_point);
 
-    let mut current_char = '.';
+    let mut current_char = 's';
 
-    // while current_char != 'S' {
-    for x in 0..50 {
+    while current_char != 'S' {
         let last_element = main_loop[main_loop.len() - 1];
         let mut current_x = last_element.0;
         let mut current_y = last_element.1;
+
+        let mut adjacent_pipes: Vec<(char, (i32, i32))> = Vec::new();
+        // println!("Current Location: {:?}", (current_x, current_y));
 
         'y: for y_diff in -1 as i32..2 {
             'x: for x_diff in -1 as i32..2 {
@@ -48,13 +50,24 @@ fn gather_main_loop(lines: &Vec<&str>, starting_point: (i32, i32)) -> Vec<(i32, 
                 }
 
                 let this_char = this_line[x_index as usize];
+                adjacent_pipes.push((this_char, (x_index, y_index)));
+            }
+        }
 
-                if check_connecting(x_diff, y_diff, this_char) {
-                    current_char = this_char;
-                    main_loop.push((x_index, y_index));
-                    println!("adding: ({x_index}, {y_index})");
-                    break 'y;
-                }
+        // println!("{:?}", adjacent_pipes);
+        for pipe in &adjacent_pipes {
+            let pipe_coordinate = pipe.1;
+
+            if check_connecting(
+                pipe_coordinate.0 - current_x,
+                pipe_coordinate.1 - current_y,
+                current_char,
+                pipe.0,
+            ) {
+                current_char = pipe.0;
+                main_loop.push(pipe_coordinate);
+                // println!("adding: ({:?})", pipe_coordinate);
+                break;
             }
         }
     }
@@ -62,11 +75,36 @@ fn gather_main_loop(lines: &Vec<&str>, starting_point: (i32, i32)) -> Vec<(i32, 
     return main_loop;
 }
 
-fn check_connecting(x_diff: i32, y_diff: i32, current_char: char) -> bool {
-    return (y_diff == -1 && vec!['F', '|', '7'].contains(&current_char))
-        || (y_diff == 1 && vec!['L', '|', 'J'].contains(&current_char))
-        || (x_diff == -1 && vec!['F', '-', 'L'].contains(&current_char))
-        || (y_diff == 1 && vec!['J', '-', '7'].contains(&current_char));
+fn check_connecting(x_diff: i32, y_diff: i32, current_char: char, next_char: char) -> bool {
+    if y_diff == -1
+        && vec!['|', 'L', 'J', 's'].contains(&current_char)
+        && vec!['F', '|', '7', 'S'].contains(&next_char)
+    {
+        return true;
+    }
+
+    if y_diff == 1
+        && vec!['|', 'F', '7', 's'].contains(&current_char)
+        && vec!['L', '|', 'J', 'S'].contains(&next_char)
+    {
+        return true;
+    }
+
+    if x_diff == -1
+        && vec!['-', 'J', '7', 's'].contains(&current_char)
+        && vec!['F', '-', 'L', 'S'].contains(&next_char)
+    {
+        return true;
+    }
+
+    if x_diff == 1
+        && vec!['-', 'L', 'F', 's'].contains(&current_char)
+        && vec!['J', '-', '7', 'S'].contains(&next_char)
+    {
+        return true;
+    }
+
+    false
 }
 
 fn find_starting_point(lines: &Vec<&str>) -> (i32, i32) {
